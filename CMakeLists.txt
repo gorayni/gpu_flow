@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 2.4)
   set(CMAKE_CXX_FLAGS "${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
 
 # OpenCV Config
-find_package( OpenCV REQUIRED )
+find_package( OpenCV 2.4.13 REQUIRED PATHS "/home/skynet/Libraries/opencv-2.4.13/build/")
 
 message(STATUS "    version: ${OpenCV_VERSION}")
 message("-- OPENCV include:   " ${OpenCV_INCLUDE_DIRS})

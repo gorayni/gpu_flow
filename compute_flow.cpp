@@ -45,10 +45,9 @@ float OUT_SZ = 256;
 bool clipFlow = true; // clips flow to [-20 20]
 bool resize_img = 1;
 
-std::string vid_path = "/media/christoph/ssd1/datasets/ucf101/avis/";
-
-std::string out_path	= "/media/christoph/ssd3/datasets/ucf101/tvl1_flow/";
-std::string out_path_jpeg	= "//media/christoph/ssd3/datasets/ucf101/jpegs_256/";
+std::string vid_path = "";
+std::string out_path = "";
+std::string out_path_jpeg = "";
 
 bool createOutDirs = true;
 
@@ -110,9 +109,11 @@ int main( int argc, char *argv[] )
 
 	const char* keys = "{ h  | help      | false | print help message }"
 				"{ v  | start_video     |  1    | start video id }"
-				"{ g  | gpuID     |  1    | use this gpu}"
+				"{ g  | gpuID     |  0    | use this gpu}"
 				"{ f  | type     |  1    | use this flow method}"
-				"{ s  | skip     |  1    | frame skip}";
+				"{ s  | skip     |  1    | frame skip}"
+				"{ i  | input    | in  | input directory}"
+				"{ o  | output   | out | outut directory}";
 
 	CommandLineParser cmd(argc, argv, keys);
 
@@ -129,7 +130,19 @@ int main( int argc, char *argv[] )
 		gpuID = cmd.get<int>("gpuID");
 		type = cmd.get<int>("type");
 		frameSkip = cmd.get<int>("skip");
+		vid_path = cmd.get<string>("input");
+		out_path = cmd.get<string>("output");
+		
+		if(! out_path.at(out_path.length()-1) != '/')
+			out_path = out_path + "/";
+
+		if(vid_path.at(vid_path.length()-1) == '/')
+			vid_path = vid_path.substr(0, vid_path.length()-1);
+
+		out_path_jpeg = out_path + "jpegs";
+
 		cout << "start_vid:" << start_with_vid << "gpuID:" << gpuID << "flow method: "<< type << " frameSkip: " << frameSkip << endl;
+		cout << "input folder: " << vid_path << "\noutput path: " << out_path << "\noutput path jpegs: " << out_path_jpeg << endl;
 	}
 	cv::gpu::setDevice(gpuID);
 
@@ -151,7 +164,6 @@ int main( int argc, char *argv[] )
 
 	for (; (dirIt.hasNext()); )         
 	{
-		std::cout << "asdf "<< std::endl;
 		dirIt.next();
 		QString file = dirIt.fileName();
 			if ((QFileInfo(dirIt.filePath()).suffix() == "mp4") || (QFileInfo(dirIt.filePath()).suffix() == "avi"))
@@ -220,7 +232,7 @@ int main( int argc, char *argv[] )
 
 			FILE *fx = fopen(outfile.c_str(),"wb");
 
-			std::cout << "Processing video " << video << std::endl;
+			//std::cout << "Processing video " << video << std::endl;
 			VideoCapture cap;
 			try
 			{
@@ -374,7 +386,7 @@ int main( int argc, char *argv[] )
 				else
 					imwrite(outfile_jpeg+cad,frame1_rgb);
 
-				std::cout << "writing:" << outfile_jpeg+cad << std::endl;
+				//std::cout << "writing:" << outfile_jpeg+cad << std::endl;
 
 				frame1_rgb.copyTo(frame0_rgb);
 				cvtColor(frame0_rgb,frame0,CV_BGR2GRAY);
@@ -408,9 +420,9 @@ int main( int argc, char *argv[] )
 				gettimeofday(&tod1,NULL);
 				t2fr = tod1.tv_sec + tod1.tv_usec / 1000000.0;
 				tdframe = 1000.0*(t2fr-t1fr);
-				cout << "Processing video" << fName << "ID="<< vidID <<  " Frame Number: " << nframes << endl;
-				cout << "Time type=" << type <<  " Flow: " << tdflow << " ms" << endl;
-				cout << "Time All: " << tdframe << " ms" <<  endl;
+				//cout << "Processing video" << fName << "ID="<< vidID <<  " Frame Number: " << nframes << endl;
+				//cout << "Time type=" << type <<  " Flow: " << tdflow << " ms" << endl;
+				//cout << "Time All: " << tdframe << " ms" <<  endl;
 			}
 			fclose(fx);
 		}

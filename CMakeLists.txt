@@ -2,33 +2,33 @@ cmake_minimum_required(VERSION 2.4)
 
 # QT5 insert
 
-  # Tell CMake to run moc when necessary:
-  set(CMAKE_AUTOMOC ON)
-  # As moc files are generated in the binary dir, tell CMake
-  # to always look for includes there:
-  set(CMAKE_INCLUDE_CURRENT_DIR ON)
+# Tell CMake to run moc when necessary:
+set(CMAKE_AUTOMOC ON)
+# As moc files are generated in the binary dir, tell CMake
+# to always look for includes there:
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-  # Widgets finds its own dependencies (QtGui and QtCore).
-  find_package(Qt5Widgets REQUIRED)
+# Widgets finds its own dependencies (QtGui and QtCore).
+find_package(Qt5Widgets REQUIRED)
 
-  # The Qt5Widgets_INCLUDES also includes the include directories for
-  # dependencies QtCore and QtGui
-  include_directories(${Qt5Widgets_INCLUDES})
+# The Qt5Widgets_INCLUDES also includes the include directories for
+# dependencies QtCore and QtGui
+include_directories(${Qt5Widgets_INCLUDES})
 
-  # We need add -DQT_WIDGETS_LIB when using QtWidgets in Qt 5.
-  add_definitions(${Qt5Widgets_DEFINITIONS})
+# We need add -DQT_WIDGETS_LIB when using QtWidgets in Qt 5.
+add_definitions(${Qt5Widgets_DEFINITIONS})
 
-  # Executables fail to build with Qt 5 in the default configuration
-  # without -fPIE. We add that here.
-  set(CMAKE_CXX_FLAGS "${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
+# Executables fail to build with Qt 5 in the default configuration
+# without -fPIE. We add that here.
+set(CMAKE_CXX_FLAGS "${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
 
 # OpenCV Config
-find_package( OpenCV 2.4.13 REQUIRED PATHS "/home/skynet/Libraries/opencv-2.4.13/build/")
+find_package(OpenCV 2.4.13 REQUIRED)
 
 message(STATUS "    version: ${OpenCV_VERSION}")
 message("-- OPENCV include:   " ${OpenCV_INCLUDE_DIRS})
 message("-- OPENCV libs dir:  " ${OpenCV_LIB_DIR})
-message("-- OPENCV libs:   " ${OpenCV_LIBS} )
+message("-- OPENCV libs:      " ${OpenCV_LIBS} )
 
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
 LINK_DIRECTORIES(${OpenCV_LIB_DIR})

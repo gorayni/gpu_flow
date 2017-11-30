@@ -41,15 +41,10 @@ using namespace std;
 using namespace cv;
 using namespace cv::gpu;
 
-float MIN_SZ = 256;
-float OUT_SZ = 256;
 
 bool clipFlow = true; // clips flow to [-20 20]
 bool resize_img = 1;
 
-std::string vid_path = "";
-std::string out_path = "";
-std::string out_path_jpeg = "";
 
 bool createOutDirs = true;
 
@@ -102,16 +97,14 @@ int main(int argc, char *argv[]) {
   double t1 = 0.0, t2 = 0.0, tdflow = 0.0, t1fr = 0.0, t2fr = 0.0,
          tdframe = 0.0;
 
-  int start_with_vid = 1;
-  int gpuID = 0;
-  int type = 1;
-  int frameSkip = 1;
 
   const char *keys = "{ h  | help      | false | print help message }"
                      "{ v  | start_video     |  1    | start video id }"
                      "{ g  | gpuID     |  0    | use this gpu}"
                      "{ f  | type     |  1    | use this flow method}"
                      "{ s  | skip     |  1    | frame skip}"
+                     "{    | min-size    | 256  | minimum size of the smallest axis of the frame }"
+                     "{    | output-size    | 256  | output size of the smallest axis of the frame }"
                      "{ i  | input    | in  | input directory}"
                      "{ o  | output   | out | outut directory}";
 
@@ -124,28 +117,29 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  if (argc > 1) {
-    start_with_vid = cmd.get<int>("start_video");
-    gpuID = cmd.get<int>("gpuID");
-    type = cmd.get<int>("type");
-    frameSkip = cmd.get<int>("skip");
-    vid_path = cmd.get<string>("input");
-    out_path = cmd.get<string>("output");
+  int start_with_vid = cmd.get<int>("start_video");
+  int gpu_id = cmd.get<int>("gpuID");
+  int type = cmd.get<int>("type");
+  int frame_skip = cmd.get<int>("skip");
+  std::string vid_path = cmd.get<string>("input");
+  std::string out_path = cmd.get<string>("output");
 
-    if (!out_path.at(out_path.length() - 1) != '/')
-      out_path = out_path + "/";
+  float minimum_size = cmd.get<int>("min-size");
+  float output_size = cmd.get<int>("output-size");
 
-    if (vid_path.at(vid_path.length() - 1) == '/')
-      vid_path = vid_path.substr(0, vid_path.length() - 1);
+  if (out_path.at(out_path.length() - 1) != '/')
+    out_path = out_path + "/";
 
-    out_path_jpeg = out_path + "jpegs";
+  if (vid_path.at(vid_path.length() - 1) == '/')
+    vid_path = vid_path.substr(0, vid_path.length() - 1);
 
-    cout << "start_vid:" << start_with_vid << "gpuID:" << gpuID
-         << "flow method: " << type << " frameSkip: " << frameSkip << endl;
-    cout << "input folder: " << vid_path << "\noutput path: " << out_path
-         << "\noutput path jpegs: " << out_path_jpeg << endl;
-  }
-  cv::gpu::setDevice(gpuID);
+  std::string out_path_jpeg = out_path + "jpegs";
+
+  cout << "start_vid:" << start_with_vid << "gpuID:" << gpu_id
+       << "flow method: " << type << " frameSkip: " << frame_skip << endl;
+  cout << "input folder: " << vid_path << "\noutput path: " << out_path
+       << "\noutput path jpegs: " << out_path_jpeg << endl;
+  cv::gpu::setDevice(gpu_id);
 
   cv::gpu::printShortCudaDeviceInfo(cv::gpu::getDevice());
 
@@ -166,8 +160,7 @@ int main(int argc, char *argv[]) {
   for (; (dirIt.hasNext());) {
     dirIt.next();
     QString file = dirIt.fileName();
-    if ((QFileInfo(dirIt.filePath()).suffix() == "mp4") ||
-        (QFileInfo(dirIt.filePath()).suffix() == "avi")) {
+    if (file.endsWith("mp4", Qt::CaseInsensitive) || file.endsWith("avi", Qt::CaseInsensitive)) {
       video = dirIt.filePath().toStdString();
     }
 
@@ -180,8 +173,7 @@ int main(int argc, char *argv[]) {
       continue;
 
     std::string fName(video);
-  std:
-    string path(video);
+    std::string path(video);
     size_t last_slash_idx = std::string::npos;
     if (!createOutDirs) {
       // Remove directory if present.
@@ -248,7 +240,7 @@ int main(int argc, char *argv[]) {
 
     if (resize_img == true) {
       factor =
-          std::max<float>(MIN_SZ / frame1_rgb_.cols, MIN_SZ / frame1_rgb_.rows);
+          std::max<float>(minimum_size / frame1_rgb_.cols, minimum_size / frame1_rgb_.rows);
 
       width = std::floor(frame1_rgb_.cols * factor);
       width -= width % 2;
@@ -261,7 +253,7 @@ int main(int argc, char *argv[]) {
       cv::resize(frame1_rgb_, frame1_rgb, cv::Size(width, height), 0, 0,
                  INTER_CUBIC);
 
-      factor_out = std::max<float>(OUT_SZ / width, OUT_SZ / height);
+      factor_out = std::max<float>(output_size / width, output_size / height);
 
       rgb_out = cv::Mat(
           Size(cvRound(width * factor_out), cvRound(height * factor_out)),
@@ -378,7 +370,7 @@ int main(int argc, char *argv[]) {
       frame0.convertTo(frame0_32, CV_32FC1, 1.0 / 255.0, 0);
 
       nframes++;
-      for (int iskip = 0; iskip < frameSkip; iskip++) {
+      for (int iskip = 0; iskip < frame_skip; iskip++) {
         cap >> frame1_rgb_;
       }
       if (frame1_rgb_.empty() == false) {
@@ -398,10 +390,9 @@ int main(int argc, char *argv[]) {
       gettimeofday(&tod1, NULL);
       t2fr = tod1.tv_sec + tod1.tv_usec / 1000000.0;
       tdframe = 1000.0 * (t2fr - t1fr);
-      // cout << "Processing video" << fName << "ID="<< vidID <<  " Frame
-      // Number: " << nframes << endl;  cout << "Time type=" << type <<  " Flow: "
-      // << tdflow << " ms" << endl;  cout << "Time All: " << tdframe << " ms" <<
-      // endl;
+      cout << "Processing video" << fName << "ID="<< vidID <<  " Frame Number: "
+           << nframes << endl;  cout << "Time type=" << type <<  " Flow: "
+           << tdflow << " ms" << endl;  cout << "Time All: " << tdframe << " ms" << endl;
     }
     fclose(fx);
   }

@@ -75,37 +75,38 @@ int main(int argc, char *argv[]) {
 
 
   const char *keys = "{ h  | help            | false | Print help message }"
-                     "{ v  | start_video     |  1    | Start video id }"
-                     "{ g  | gpuID           |  0    | Use this gpu}"
-                     "{ f  | type            |  1    | Use this flow method}"
-                     "{ s  | skip            |  1    | Time step between frames for OF calculation}"
+                     "{ i  | input-dir       | in    | Input directory}"
+                     "{ o  | output-dir      | out   | Output directory}"
+                     "{ v  | start-video     |  1    | Start video ID }"
+                     "{ g  | gpu-id          |  0    | Specify GPU ID to use for computing flow }"
+                     "{ f  | method          |  1    | Specify flow method (Brox=0, TVL1=1) }"
+                     "{ s  | step            |  1    | Time step between frames for flow calculation}"
                      "{    | min-size        | 256   | Minimum size of the smallest axis of the frame}"
                      "{    | output-size     | 256   | Output size of the smallest axis of the frame}"
                      "{ r  | resize          | true  | Resize frames and flow }"
                      "{    | clip-flow       | true  | Clip flow to interval [-20 20]}"
-                     "{ i  | input           | in    | Input directory}"
-                     "{ o  | output          | out   | Output directory}";
+  ;
 
   CommandLineParser cmd(argc, argv, keys);
 
   if (cmd.get<bool>("help")) {
     std::cerr << "Usage: " << argv[0] << " [options]" << std::endl;
-    std::cerr << "Availble options:" << std::endl;
+    std::cerr << "Available options:" << std::endl;
     cmd.printParams();
     return 0;
   }
 
-  bool clip_flow = cmd.get<bool>("clip-flow"); // clips flow to [-20 20]
-  bool resize_img = cmd.get<bool>("resize");
-  int start_with_vid = cmd.get<int>("start_video");
-  int gpu_id = cmd.get<int>("gpuID");
-  int type = cmd.get<int>("type");
-  int frame_skip = cmd.get<int>("skip");
-  std::string vid_path = cmd.get<string>("input");
-  std::string out_path = cmd.get<string>("output");
-
+  std::string vid_path = cmd.get<string>("input-dir");
+  std::string out_path = cmd.get<string>("output-dir");
+  int start_with_vid = cmd.get<int>("start-video");
+  int gpu_id = cmd.get<int>("gpu-id");
+  int method = cmd.get<int>("method");
+  int frame_step = cmd.get<int>("step");
   float minimum_size = cmd.get<int>("min-size");
   float output_size = cmd.get<int>("output-size");
+  bool resize_img = cmd.get<bool>("resize");
+  bool clip_flow = cmd.get<bool>("clip-flow"); // clips flow to [-20 20]
+
 
   if (out_path.at(out_path.length() - 1) != '/')
     out_path = out_path + "/";
@@ -117,8 +118,8 @@ int main(int argc, char *argv[]) {
 
   std::cerr << "Start with video:" << start_with_vid << std::endl
             << "GPU ID:" << gpu_id << std::endl
-            << "Flow method: " << (type == 0 ? "Brox" : "TVL1") << std::endl
-            << "Number of frames in window for OF: " << frame_skip << std::endl
+            << "Flow method: " << (method == 0 ? "Brox" : "TVL1") << std::endl
+            << "Number of frames in window for OF: " << frame_step << std::endl
             << "Input folder: " << vid_path << std::endl
             << "Optical flow folder: " << out_path << std::endl
             << "Frames folder: " << out_path_jpeg << std::endl;
@@ -259,7 +260,7 @@ int main(int argc, char *argv[]) {
         gettimeofday(&tod1, NULL);
         //	GetSystemTime(&tod1);
         t1 = tod1.tv_sec + tod1.tv_usec / 1000000.0;
-        switch (type) {
+        switch (method) {
         case 0:
           frame1GPU.upload(frame1_32);
           frame0GPU.upload(frame0_32);
@@ -338,7 +339,7 @@ int main(int argc, char *argv[]) {
       frame0.convertTo(frame0_32, CV_32FC1, 1.0 / 255.0, 0);
 
       nframes++;
-      for (int iskip = 0; iskip < frame_skip; iskip++) {
+      for (int iskip = 0; iskip < frame_step; iskip++) {
         cap >> frame1_rgb_;
       }
       if (frame1_rgb_.empty() == false) {
@@ -360,8 +361,8 @@ int main(int argc, char *argv[]) {
       tdframe = 1000.0 * (t2fr - t1fr);
       std::cerr << "Processing video: " << fName << std::endl
                 << "   ID: "<< vidID << std::endl
-                << "   Frame Number: " << nframes << std::endl
-                << "   Flow type: " << type <<  std::endl
+                << "   Frame number: " << nframes << std::endl
+                << "   Flow method: " << method <<  std::endl
                 << "   Time computing OF: " << tdflow << " ms" << std::endl
                 << "   Time All: " << tdframe << " ms" << std::endl;
     }

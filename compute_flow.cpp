@@ -41,13 +41,6 @@ using namespace std;
 using namespace cv;
 using namespace cv::gpu;
 
-
-bool clipFlow = true; // clips flow to [-20 20]
-bool resize_img = 1;
-
-
-bool createOutDirs = true;
-
 // Global variables for gpu::BroxOpticalFlow
 const float alpha_ = 0.197;
 const float gamma_ = 50;
@@ -55,23 +48,6 @@ const float scale_factor_ = 0.8;
 const int inner_iterations_ = 10;
 const int outer_iterations_ = 77;
 const int solver_iterations_ = 10;
-
-void converFlowMat(Mat &flowIn, Mat &flowOut, float min_range_,
-                   float max_range_) {
-  float value = 0.0f;
-  for (int i = 0; i < flowIn.rows; i++) {
-    float *Di = flowIn.ptr<float>(i);
-    char *Ii = flowOut.ptr<char>(i);
-    for (int j = 0; j < flowIn.cols; j++) {
-      value = (Di[j] - min_range_) / (max_range_ - min_range_);
-
-      value *= 255;
-      value = cvRound(value);
-
-      Ii[j] = (char)value;
-    }
-  }
-}
 
 static void convertFlowToImage(const Mat &flowIn, Mat &flowOut,
                                float lowerBound, float higherBound) {
@@ -98,25 +74,29 @@ int main(int argc, char *argv[]) {
          tdframe = 0.0;
 
 
-  const char *keys = "{ h  | help      | false | print help message }"
-                     "{ v  | start_video     |  1    | start video id }"
-                     "{ g  | gpuID     |  0    | use this gpu}"
-                     "{ f  | type     |  1    | use this flow method}"
-                     "{ s  | skip     |  1    | frame skip}"
-                     "{    | min-size    | 256  | minimum size of the smallest axis of the frame }"
-                     "{    | output-size    | 256  | output size of the smallest axis of the frame }"
-                     "{ i  | input    | in  | input directory}"
-                     "{ o  | output   | out | outut directory}";
+  const char *keys = "{ h  | help            | false | Print help message }"
+                     "{ v  | start_video     |  1    | Start video id }"
+                     "{ g  | gpuID           |  0    | Use this gpu}"
+                     "{ f  | type            |  1    | Use this flow method}"
+                     "{ s  | skip            |  1    | Time step between frames for OF calculation}"
+                     "{    | min-size        | 256   | Minimum size of the smallest axis of the frame}"
+                     "{    | output-size     | 256   | Output size of the smallest axis of the frame}"
+                     "{ r  | resize          | true  | Resize frames and flow }"
+                     "{    | clip-flow       | true  | Clip flow to interval [-20 20]}"
+                     "{ i  | input           | in    | Input directory}"
+                     "{ o  | output          | out   | Output directory}";
 
   CommandLineParser cmd(argc, argv, keys);
 
   if (cmd.get<bool>("help")) {
-    cout << "Usage: brox_optical_flow [options]" << endl;
-    cout << "Avaible options:" << endl;
+    std::cerr << "Usage: " << argv[0] << " [options]" << std::endl;
+    std::cerr << "Availble options:" << std::endl;
     cmd.printParams();
     return 0;
   }
 
+  bool clip_flow = cmd.get<bool>("clip-flow"); // clips flow to [-20 20]
+  bool resize_img = cmd.get<bool>("resize");
   int start_with_vid = cmd.get<int>("start_video");
   int gpu_id = cmd.get<int>("gpuID");
   int type = cmd.get<int>("type");
@@ -135,10 +115,13 @@ int main(int argc, char *argv[]) {
 
   std::string out_path_jpeg = out_path + "jpegs";
 
-  cout << "start_vid:" << start_with_vid << "gpuID:" << gpu_id
-       << "flow method: " << type << " frameSkip: " << frame_skip << endl;
-  cout << "input folder: " << vid_path << "\noutput path: " << out_path
-       << "\noutput path jpegs: " << out_path_jpeg << endl;
+  std::cerr << "Start with video:" << start_with_vid << std::endl
+            << "GPU ID:" << gpu_id << std::endl
+            << "Flow method: " << (type == 0 ? "Brox" : "TVL1") << std::endl
+            << "Number of frames in window for OF: " << frame_skip << std::endl
+            << "Input folder: " << vid_path << std::endl
+            << "Optical flow folder: " << out_path << std::endl
+            << "Frames folder: " << out_path_jpeg << std::endl;
   cv::gpu::setDevice(gpu_id);
 
   cv::gpu::printShortCudaDeviceInfo(cv::gpu::getDevice());
@@ -174,22 +157,8 @@ int main(int argc, char *argv[]) {
 
     std::string fName(video);
     std::string path(video);
-    size_t last_slash_idx = std::string::npos;
-    if (!createOutDirs) {
-      // Remove directory if present.
-      // Do this before extension removal incase directory has a period
-      // character.
-      std::cout << "removing directories: " << fName << std::endl;
-      last_slash_idx = fName.find_last_of("\\/");
-      if (std::string::npos != last_slash_idx) {
-        fName.erase(0, last_slash_idx + 1);
-        path.erase(last_slash_idx + 1, path.length());
-      }
-    } else {
-      last_slash_idx = fName.find(vid_path);
-      fName.erase(0, vid_path.length());
-      path.erase(vid_path.length(), path.length());
-    }
+    fName.erase(0, vid_path.length());
+    path.erase(vid_path.length(), path.length());
 
     // Remove extension if present.
     const size_t period_idx = fName.rfind('.');
@@ -201,13 +170,13 @@ int main(int argc, char *argv[]) {
     bool folder_exists = QDir(out_folder_u).exists();
 
     if (folder_exists) {
-      std::cout << "already exists: " << out_path << fName << std::endl;
+      std::cerr << "already exists: " << out_path << fName << std::endl;
       continue;
     }
 
     bool folder_created = QDir().mkpath(out_folder_u);
     if (!folder_created) {
-      std::cout << "cannot create: " << out_path << fName << std::endl;
+      std::cerr << "Cannot create: " << out_path << fName << std::endl;
       continue;
     }
 
@@ -221,12 +190,11 @@ int main(int argc, char *argv[]) {
 
     FILE *fx = fopen(outfile.c_str(), "wb");
 
-    // std::cout << "Processing video " << video << std::endl;
     VideoCapture cap;
     try {
       cap.open(video);
     } catch (std::exception &e) {
-      std::cout << e.what() << '\n';
+      std::cerr << e.what() << '\n';
     }
 
     int nframes = 0, width = 0, height = 0, width_out = 0, height_out = 0;
@@ -330,7 +298,7 @@ int main(int argc, char *argv[]) {
         float min_v_f = min_v;
         float max_v_f = max_v;
 
-        if (clipFlow) {
+        if (clip_flow) {
           min_u_f = -20;
           max_u_f = 20;
 
@@ -363,7 +331,7 @@ int main(int argc, char *argv[]) {
       } else
         imwrite(outfile_jpeg + cad, frame1_rgb);
 
-      // std::cout << "writing:" << outfile_jpeg+cad << std::endl;
+      std::cerr << "Writing: " << outfile_jpeg+cad << std::endl;
 
       frame1_rgb.copyTo(frame0_rgb);
       cvtColor(frame0_rgb, frame0, CV_BGR2GRAY);
@@ -390,9 +358,12 @@ int main(int argc, char *argv[]) {
       gettimeofday(&tod1, NULL);
       t2fr = tod1.tv_sec + tod1.tv_usec / 1000000.0;
       tdframe = 1000.0 * (t2fr - t1fr);
-      cout << "Processing video" << fName << "ID="<< vidID <<  " Frame Number: "
-           << nframes << endl;  cout << "Time type=" << type <<  " Flow: "
-           << tdflow << " ms" << endl;  cout << "Time All: " << tdframe << " ms" << endl;
+      std::cerr << "Processing video: " << fName << std::endl
+                << "   ID: "<< vidID << std::endl
+                << "   Frame Number: " << nframes << std::endl
+                << "   Flow type: " << type <<  std::endl
+                << "   Time computing OF: " << tdflow << " ms" << std::endl
+                << "   Time All: " << tdframe << " ms" << std::endl;
     }
     fclose(fx);
   }

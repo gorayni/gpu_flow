@@ -4,7 +4,10 @@ RUN apt-get update && \
 
 RUN mkdir -p /src
 RUN mkdir -p /video
+RUN mkdir -p /output
+
 VOLUME /video
+VOLUME /output
 
 WORKDIR /src
 ADD . /src/gpu_flow
@@ -16,3 +19,4 @@ RUN mkdir gpu_flow_build && cd gpu_flow_build && \
 
 WORKDIR /video
 ENTRYPOINT ["/src/gpu_flow_build/compute_flow"]
+CMD ["--input-dir", "/video", "--ouput-dir", "/output"

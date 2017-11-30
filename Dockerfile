@@ -19,4 +19,4 @@ RUN mkdir gpu_flow_build && cd gpu_flow_build && \
 
 WORKDIR /video
 ENTRYPOINT ["/src/gpu_flow_build/compute_flow"]
-CMD ["--input-dir", "/video", "--ouput-dir", "/output"
+CMD ["--input-dir", "/video/", "--output-dir", "/output/"]

@@ -360,8 +360,8 @@ int main(int argc, char *argv[]) {
       t2fr = tod1.tv_sec + tod1.tv_usec / 1000000.0;
       tdframe = 1000.0 * (t2fr - t1fr);
       std::cerr << "Processing video: " << fName << std::endl
-                << "   ID: "<< vidID << std::endl
-                << "   Frame number: " << nframes << std::endl
+                << "   Video ID: "<< vidID << std::endl
+                << "   Frame: " << nframes << std::endl
                 << "   Flow method: " << method <<  std::endl
                 << "   Time computing OF: " << tdflow << " ms" << std::endl
                 << "   Time All: " << tdframe << " ms" << std::endl;

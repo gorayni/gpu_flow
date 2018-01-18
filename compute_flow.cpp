@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <math.h>
+#include <queue>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,13 +32,15 @@
 #include <QFileInfo>
 #include <QString>
 
+using namespace std; // necessary before opencv2 includes as otherwise they
+                     // don't have right namespace
+
 #include "opencv2/gpu/gpu.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/video/tracking.hpp"
 #include <opencv2/core/core.hpp>
 
-using namespace std;
 using namespace cv;
 using namespace cv::gpu;
 
@@ -73,19 +76,26 @@ int main(int argc, char *argv[]) {
   double t1 = 0.0, t2 = 0.0, tdflow = 0.0, t1fr = 0.0, t2fr = 0.0,
          tdframe = 0.0;
 
-
-  const char *keys = "{ h  | help            | false | Print help message }"
-                     "{ i  | input-dir       | in    | Input directory}"
-                     "{ o  | output-dir      | out   | Output directory}"
-                     "{ v  | start-video     |  1    | Start video ID }"
-                     "{ g  | gpu-id          |  0    | Specify GPU ID to use for computing flow }"
-                     "{ f  | method          |  1    | Specify flow method (Brox=0, TVL1=1) }"
-                     "{ s  | step            |  1    | Time step between frames for flow calculation}"
-                     "{    | min-size        | 256   | Minimum size of the smallest axis of the frame}"
-                     "{    | output-size     | 256   | Output size of the smallest axis of the frame}"
-                     "{ r  | resize          | true  | Resize frames and flow }"
-                     "{    | clip-flow       | true  | Clip flow to interval [-20 20]}"
-  ;
+  const char *keys =
+      "{ h  | help            | false | Print help message }"
+      "{ i  | input-dir       | in    | Input directory}"
+      "{ o  | output-dir      | out   | Output directory}"
+      "{ f  | force           | 0     | Overwrite output directory if it "
+      "already exists }"
+      "{ g  | gpu-id          | 0     | Specify GPU ID to use for computing "
+      "flow }"
+      "{ m  | method          | 1     | Specify flow method (Brox=0, TVL1=1) }"
+      "{ s  | stride          | 1     | Time step between frames for flow "
+      "calculation}"
+      "{ d  | dilation        | 1     | Temporal dilation (Use neighbouring "
+      "frames=1, skip one=2, ...)}"
+      "{ b  | bound           | 20    | maximum optical flow for clipping}"
+      "{    | min-size        | 256   | Minimum size of the smallest axis of "
+      "the frame}"
+      "{    | output-size     | 256   | Output size of the smallest axis of "
+      "the frame}"
+      "{ r  | resize          | true  | Resize frames and flow }"
+      "{    | clip-flow       | true  | Clip flow to interval [-bound bound]}";
 
   CommandLineParser cmd(argc, argv, keys);
 
@@ -98,15 +108,16 @@ int main(int argc, char *argv[]) {
 
   std::string vid_path = cmd.get<string>("input-dir");
   std::string out_path = cmd.get<string>("output-dir");
-  int start_with_vid = cmd.get<int>("start-video");
   int gpu_id = cmd.get<int>("gpu-id");
   int method = cmd.get<int>("method");
-  int frame_step = cmd.get<int>("step");
+  int stride = cmd.get<int>("stride");
+  float bound = cmd.get<float>("bound");
+  float dilation = cmd.get<int>("dilation");
   float minimum_size = cmd.get<int>("min-size");
   float output_size = cmd.get<int>("output-size");
   bool resize_img = cmd.get<bool>("resize");
-  bool clip_flow = cmd.get<bool>("clip-flow"); // clips flow to [-20 20]
-
+  bool clip_flow = cmd.get<bool>("clip-flow");
+  bool force = cmd.get<bool>("force");
 
   if (out_path.at(out_path.length() - 1) != '/')
     out_path = out_path + "/";
@@ -116,10 +127,9 @@ int main(int argc, char *argv[]) {
 
   std::string out_path_jpeg = out_path + "jpegs";
 
-  std::cerr << "Start with video:" << start_with_vid << std::endl
-            << "GPU ID:" << gpu_id << std::endl
+  std::cerr << "GPU ID:" << gpu_id << std::endl
             << "Flow method: " << (method == 0 ? "Brox" : "TVL1") << std::endl
-            << "Number of frames in window for OF: " << frame_step << std::endl
+            << "Number of frames in window for OF: " << stride << std::endl
             << "Input folder: " << vid_path << std::endl
             << "Optical flow folder: " << out_path << std::endl
             << "Frames folder: " << out_path_jpeg << std::endl;
@@ -138,22 +148,17 @@ int main(int argc, char *argv[]) {
 
   QDirIterator dirIt(vpath, QDirIterator::Subdirectories);
 
-  int vidID = 0;
   std::string video, outfile_u, outfile_v, outfile_jpeg;
 
   for (; (dirIt.hasNext());) {
     dirIt.next();
     QString file = dirIt.fileName();
-    if (file.endsWith("mp4", Qt::CaseInsensitive) || file.endsWith("avi", Qt::CaseInsensitive)) {
+    if (file.endsWith("mp4", Qt::CaseInsensitive) ||
+        file.endsWith("avi", Qt::CaseInsensitive)) {
       video = dirIt.filePath().toStdString();
     }
 
     else
-      continue;
-
-    vidID++;
-
-    if (vidID < start_with_vid)
       continue;
 
     std::string fName(video);
@@ -167,29 +172,40 @@ int main(int argc, char *argv[]) {
       fName.erase(period_idx);
 
     QString out_folder_u = QString::fromStdString(out_path + "u/" + fName);
+    QString out_folder_v = QString::fromStdString(out_path + "v/" + fName);
+    QString out_folder_jpeg = QString::fromStdString(out_path_jpeg + fName);
 
     bool folder_exists = QDir(out_folder_u).exists();
 
     if (folder_exists) {
-      std::cerr << "already exists: " << out_path << fName << std::endl;
-      continue;
+      if (force) {
+        QDir(out_folder_u).removeRecursively();
+        QDir(out_folder_v).removeRecursively();
+        QDir(out_folder_jpeg).removeRecursively();
+      } else {
+        std::cerr << "Flow folder already exists, skipping: " << out_path
+                  << fName << std::endl;
+        continue;
+      }
     }
 
     bool folder_created = QDir().mkpath(out_folder_u);
     if (!folder_created) {
-      std::cerr << "Cannot create: " << out_path << fName << std::endl;
+      std::cerr << "Cannot create folder, skipping: " << out_path << fName
+                << std::endl;
       continue;
     }
 
-    QString out_folder_v = QString::fromStdString(out_path + "v/" + fName);
+    QDir().mkpath(out_folder_u);
     QDir().mkpath(out_folder_v);
-
-    QString out_folder_jpeg = QString::fromStdString(out_path_jpeg + fName);
     QDir().mkpath(out_folder_jpeg);
 
     std::string outfile = out_path + "u/" + fName + ".bin";
+    if (QFile(QString::fromStdString(outfile)).exists() && force) {
+      QFile(QString::fromStdString(outfile)).remove();
+    }
 
-    FILE *fx = fopen(outfile.c_str(), "wb");
+    // FILE *fx = fopen(outfile.c_str(), "wb");
 
     VideoCapture cap;
     try {
@@ -205,11 +221,16 @@ int main(int argc, char *argv[]) {
       return -1;
     }
 
+    std::queue<cv::Mat> frameQueue;
+
     cap >> frame1_rgb_;
+    if (frame1_rgb_.empty()) {
+      break;
+    }
 
     if (resize_img == true) {
-      factor =
-          std::max<float>(minimum_size / frame1_rgb_.cols, minimum_size / frame1_rgb_.rows);
+      factor = std::max<float>(minimum_size / frame1_rgb_.cols,
+                               minimum_size / frame1_rgb_.rows);
 
       width = std::floor(frame1_rgb_.cols * factor);
       width -= width % 2;
@@ -234,6 +255,23 @@ int main(int argc, char *argv[]) {
       width = frame1_rgb.cols;
       height = frame1_rgb.rows;
       frame1_rgb_.copyTo(frame1_rgb);
+    }
+    frameQueue.push(frame1_rgb.clone());
+
+    for (int i = 0; i < dilation - 1; i++) {
+      cap >> frame1_rgb_;
+
+      if (resize_img == true) {
+        cv::resize(frame1_rgb_, frame1_rgb, cv::Size(width, height), 0, 0,
+                   INTER_CUBIC);
+      } else {
+        frame1_rgb_.copyTo(frame1_rgb);
+      }
+
+      frameQueue.push(frame1_rgb.clone());
+      for (int i = 0; i < stride - 1; i++) {
+        cap >> frame1_rgb_;
+      }
     }
 
     // Allocate memory for the images
@@ -289,22 +327,26 @@ int main(int argc, char *argv[]) {
         }
 
         double min_u, max_u;
-        cv::minMaxLoc(imgU, &min_u, &max_u);
         double min_v, max_v;
-        cv::minMaxLoc(imgV, &min_v, &max_v);
 
-        float min_u_f = min_u;
-        float max_u_f = max_u;
-
-        float min_v_f = min_v;
-        float max_v_f = max_v;
+        float min_u_f, max_u_f;
+        float min_v_f, max_v_f;
 
         if (clip_flow) {
-          min_u_f = -20;
-          max_u_f = 20;
+          min_u_f = -bound;
+          max_u_f = bound;
 
-          min_v_f = -20;
-          max_v_f = 20;
+          min_v_f = -bound;
+          max_v_f = bound;
+        } else {
+          cv::minMaxLoc(imgU, &min_u, &max_u);
+          cv::minMaxLoc(imgV, &min_v, &max_v);
+
+          min_u_f = min_u;
+          max_u_f = max_u;
+
+          min_v_f = min_v;
+          max_v_f = max_v;
         }
 
         cv::Mat img_u(imgU.rows, imgU.cols, CV_8UC1);
@@ -318,10 +360,10 @@ int main(int argc, char *argv[]) {
         imwrite(outfile_u + cad, img_u);
         imwrite(outfile_v + cad, img_v);
 
-        fwrite(&min_u_f, sizeof(float), 1, fx);
-        fwrite(&max_u_f, sizeof(float), 1, fx);
-        fwrite(&min_v_f, sizeof(float), 1, fx);
-        fwrite(&max_v_f, sizeof(float), 1, fx);
+        // fwrite(&min_u_f, sizeof(float), 1, fx);
+        // fwrite(&max_u_f, sizeof(float), 1, fx);
+        // fwrite(&min_v_f, sizeof(float), 1, fx);
+        // fwrite(&max_v_f, sizeof(float), 1, fx);
       }
 
       sprintf(cad, "/frame%06d.jpg", nframes + 1);
@@ -332,14 +374,10 @@ int main(int argc, char *argv[]) {
       } else
         imwrite(outfile_jpeg + cad, frame1_rgb);
 
-      std::cerr << "Writing: " << outfile_jpeg+cad << std::endl;
-
-      frame1_rgb.copyTo(frame0_rgb);
-      cvtColor(frame0_rgb, frame0, CV_BGR2GRAY);
-      frame0.convertTo(frame0_32, CV_32FC1, 1.0 / 255.0, 0);
+      std::cerr << "Writing: " << outfile_jpeg + cad << std::endl;
 
       nframes++;
-      for (int iskip = 0; iskip < frame_step; iskip++) {
+      for (int iskip = 0; iskip < stride; iskip++) {
         cap >> frame1_rgb_;
       }
       if (frame1_rgb_.empty() == false) {
@@ -349,9 +387,15 @@ int main(int argc, char *argv[]) {
         } else {
           frame1_rgb_.copyTo(frame1_rgb);
         }
+        frameQueue.push(frame1_rgb.clone());
+        frame0_rgb = frameQueue.front().clone();
+        frameQueue.pop();
 
         cvtColor(frame1_rgb, frame1, CV_BGR2GRAY);
         frame1.convertTo(frame1_32, CV_32FC1, 1.0 / 255.0, 0);
+
+        cvtColor(frame0_rgb, frame0, CV_BGR2GRAY);
+        frame0.convertTo(frame0_32, CV_32FC1, 1.0 / 255.0, 0);
       } else {
         break;
       }
@@ -360,13 +404,12 @@ int main(int argc, char *argv[]) {
       t2fr = tod1.tv_sec + tod1.tv_usec / 1000000.0;
       tdframe = 1000.0 * (t2fr - t1fr);
       std::cerr << "Processing video: " << fName << std::endl
-                << "   Video ID: "<< vidID << std::endl
                 << "   Frame: " << nframes << std::endl
-                << "   Flow method: " << method <<  std::endl
+                << "   Flow method: " << method << std::endl
                 << "   Time computing OF: " << tdflow << " ms" << std::endl
                 << "   Time All: " << tdframe << " ms" << std::endl;
     }
-    fclose(fx);
+    // fclose(fx);
   }
 
   return 0;

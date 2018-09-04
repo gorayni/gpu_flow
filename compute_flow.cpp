@@ -95,7 +95,8 @@ int main(int argc, char *argv[]) {
       "{    | output-size     | 256   | Output size of the smallest axis of "
       "the frame}"
       "{ r  | resize          | true  | Resize frames and flow }"
-      "{    | clip-flow       | true  | Clip flow to interval [-bound bound]}";
+      "{    | clip-flow       | true  | Clip flow to interval [-bound bound]}"
+      "{ v  | verbose         | false | Log verbosely }";
 
   CommandLineParser cmd(argc, argv, keys);
 
@@ -118,6 +119,7 @@ int main(int argc, char *argv[]) {
   bool resize_img = cmd.get<bool>("resize");
   bool clip_flow = cmd.get<bool>("clip-flow");
   bool force = cmd.get<bool>("force");
+  bool verbose = cmd.get<bool>("verbose");
 
   if (out_path.at(out_path.length() - 1) != '/')
     out_path = out_path + "/";
@@ -210,6 +212,7 @@ int main(int argc, char *argv[]) {
     VideoCapture cap;
     try {
       cap.open(video);
+      std::cerr << "Processing video: " << fName << std::endl;
     } catch (std::exception &e) {
       std::cerr << e.what() << '\n';
     }
@@ -374,7 +377,9 @@ int main(int argc, char *argv[]) {
       } else
         imwrite(outfile_jpeg + cad, frame1_rgb);
 
-      std::cerr << "Writing: " << outfile_jpeg + cad << std::endl;
+      if (verbose) {
+        std::cerr << "Writing: " << outfile_jpeg + cad << std::endl;
+      }
 
       nframes++;
       for (int iskip = 0; iskip < stride; iskip++) {
@@ -403,11 +408,13 @@ int main(int argc, char *argv[]) {
       gettimeofday(&tod1, NULL);
       t2fr = tod1.tv_sec + tod1.tv_usec / 1000000.0;
       tdframe = 1000.0 * (t2fr - t1fr);
-      std::cerr << "Processing video: " << fName << std::endl
-                << "   Frame: " << nframes << std::endl
-                << "   Flow method: " << method << std::endl
-                << "   Time computing OF: " << tdflow << " ms" << std::endl
-                << "   Time All: " << tdframe << " ms" << std::endl;
+      if (verbose) {
+        std::cerr << "Processing video: " << fName << std::endl
+                  << "   Frame: " << nframes << std::endl
+                  << "   Flow method: " << method << std::endl
+                  << "   Time computing OF: " << tdflow << " ms" << std::endl
+                  << "   Time All: " << tdframe << " ms" << std::endl;
+      }
     }
     // fclose(fx);
   }

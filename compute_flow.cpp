@@ -160,9 +160,10 @@ int main(int argc, char *argv[]) {
       video = dirIt.filePath().toStdString();
     }
 
-    else
+    else {
+      std::cerr << dirIt.filePath().toStdString() << std::endl;
       continue;
-
+    }
     std::string fName(video);
     std::string path(video);
     fName.erase(0, vid_path.length());

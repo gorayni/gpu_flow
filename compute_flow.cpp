@@ -151,8 +151,10 @@ int main(int argc, char *argv[]) {
   QDirIterator dirIt(vpath, QDirIterator::Subdirectories);
 
   std::string video, outfile_u, outfile_v, outfile_jpeg;
-
+  
+  std::cerr << "aaaaaaaaaaaaaaaaaa" << std::endl;
   for (; (dirIt.hasNext());) {
+    std::cerr << "bbbbbbbbbbbbbbbbb" << std::endl;
     dirIt.next();
     QString file = dirIt.fileName();
     if (file.endsWith("mp4", Qt::CaseInsensitive) ||

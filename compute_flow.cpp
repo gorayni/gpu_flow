@@ -151,14 +151,14 @@ int main(int argc, char *argv[]) {
   QDirIterator dirIt(vpath, QDirIterator::Subdirectories);
 
   std::string video, outfile_u, outfile_v, outfile_jpeg;
-  
-  std::cerr << "aaaaaaaaaaaaaaaaaa" << std::endl;
+
   for (; (dirIt.hasNext());) {
-    std::cerr << "bbbbbbbbbbbbbbbbb" << std::endl;
     dirIt.next();
     QString file = dirIt.fileName();
     if (file.endsWith("mp4", Qt::CaseInsensitive) ||
-        file.endsWith("avi", Qt::CaseInsensitive)) {
+        file.endsWith("avi", Qt::CaseInsensitive) ||
+        file.endsWith("1.mkv", Qt::CaseInsensitive) ||
+        file.endsWith("2.mkv", Qt::CaseInsensitive)) {
       video = dirIt.filePath().toStdString();
     }
 
@@ -372,13 +372,12 @@ int main(int argc, char *argv[]) {
         // fwrite(&max_v_f, sizeof(float), 1, fx);
       }
 
-      sprintf(cad, "/frame%06d.jpg", nframes + 1);
+      /*sprintf(cad, "/frame%06d.jpg", nframes + 1);
       if (resize_img == true) {
-        cv::resize(frame1_rgb, rgb_out, cv::Size(width_out, height_out), 0, 0,
-                   INTER_CUBIC);
+        cv::resize(frame1_rgb, rgb_out, cv::Size(width_out, height_out), 0, 0, INTER_CUBIC);
         imwrite(outfile_jpeg + cad, rgb_out);
       } else
-        imwrite(outfile_jpeg + cad, frame1_rgb);
+        imwrite(outfile_jpeg + cad, frame1_rgb);*/
 
       if (verbose) {
         std::cerr << "Writing: " << outfile_jpeg + cad << std::endl;

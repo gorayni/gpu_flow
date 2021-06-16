@@ -134,7 +134,8 @@ int main(int argc, char *argv[]) {
             << "Number of frames in window for OF: " << stride << std::endl
             << "Input folder: " << vid_path << std::endl
             << "Optical flow folder: " << out_path << std::endl
-            << "Frames folder: " << out_path_jpeg << std::endl;
+            << "Frames folder: " << out_path_jpeg << std::endl
+            << "Resize: " << resize_img << std::endl;
   cv::gpu::setDevice(gpu_id);
 
   cv::gpu::printShortCudaDeviceInfo(cv::gpu::getDevice());

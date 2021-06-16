@@ -46,7 +46,7 @@ float MIN_SZ = 256;
 float OUT_SZ = 256;
 
 bool clipFlow = true; // clips flow to [-20 20]
-bool resize_img = true;
+bool resize_img = false;
 
 // These are default paths
 

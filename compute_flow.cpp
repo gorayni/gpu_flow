@@ -158,7 +158,9 @@ int main(int argc, char *argv[]) {
     if (file.endsWith("mp4", Qt::CaseInsensitive) ||
         file.endsWith("avi", Qt::CaseInsensitive) ||
         file.endsWith("1.mkv", Qt::CaseInsensitive) ||
-        file.endsWith("2.mkv", Qt::CaseInsensitive)) {
+        file.endsWith("1_HQ.mkv", Qt::CaseInsensitive) ||
+        file.endsWith("2.mkv", Qt::CaseInsensitive) ||
+        file.endsWith("2_HQ.mkv", Qt::CaseInsensitive)) {
       video = dirIt.filePath().toStdString();
     }
 
